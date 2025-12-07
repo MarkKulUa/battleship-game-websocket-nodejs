@@ -4,6 +4,7 @@ import { randomUUID } from 'crypto';
 
 class GameStorage {
     private games: Map<string, IGame> = new Map();
+    private botGames: Map<string, number> = new Map(); // gameId -> botPlayerIndex
 
     createGame(player1Id: string, player2Id: string): IGame {
         const gameId = this.generateId();
@@ -20,6 +21,18 @@ class GameStorage {
         };
         this.games.set(gameId, game);
         return game;
+    }
+
+    setBotGame(gameId: string, botPlayerIndex: number): void {
+        this.botGames.set(gameId, botPlayerIndex);
+    }
+
+    isBotGame(gameId: string): boolean {
+        return this.botGames.has(gameId);
+    }
+
+    getBotPlayerIndex(gameId: string): number | undefined {
+        return this.botGames.get(gameId);
     }
 
     findById(gameId: string): IGame | undefined {
@@ -54,6 +67,7 @@ class GameStorage {
 
     deleteGame(gameId: string): void {
         this.games.delete(gameId);
+        this.botGames.delete(gameId);
     }
 
     private generateId(): string {

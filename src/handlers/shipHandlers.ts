@@ -4,6 +4,8 @@ import { IExtendedWebSocket } from '../types/websocket.js';
 import { IAddShipsData, IStartGameData } from '../types/messages.js';
 import { IShip, TShipType } from '../models/Ship.js';
 import { TCellStatus } from '../models/Board.js';
+import { log, logError } from '../utils/logger.js';
+import { BotPlayer } from '../bot/BotPlayer.js';
 
 /**
  * Handle ships placement
@@ -17,11 +19,11 @@ export function handleAddShips(
         const shipsData: IAddShipsData = JSON.parse(data);
         const { gameId, ships, indexPlayer } = shipsData;
 
-        console.log(`Player ${indexPlayer} adding ships to game ${gameId}`);
+        log(`Player ${indexPlayer} adding ships to game ${gameId}`);
 
         const game = gameStorage.findById(gameId);
         if (!game) {
-            console.error('Game not found:', gameId);
+            logError('Game not found:', gameId);
             return;
         }
 
@@ -42,16 +44,32 @@ export function handleAddShips(
         board.ships = convertedShips;
         placeShipsOnMatrix(board.matrix, convertedShips);
 
-        console.log(`Ships placed for player ${indexPlayer}`);
+        log(`Ships placed for player ${indexPlayer}`, { gameId, shipsCount: convertedShips.length });
+
+        // If this is a bot game and player just placed ships, place bot ships
+        if (gameStorage.isBotGame(gameId)) {
+            const botIndex = gameStorage.getBotPlayerIndex(gameId);
+            if (botIndex && indexPlayer !== botIndex) {
+                log('Bot game detected, placing bot ships');
+                const bot = new BotPlayer(gameId, botIndex, wss);
+                const botShips = bot.placeShips();
+                
+                const botBoard = botIndex === game.player1Index ? game.board1 : game.board2;
+                botBoard.ships = botShips;
+                placeShipsOnMatrix(botBoard.matrix, botShips);
+                
+                log(`Bot ships placed: ${botShips.length} ships`);
+            }
+        }
 
         // Check if both players have placed their ships
         if (game.board1.ships.length > 0 && game.board2.ships.length > 0) {
-            console.log('Both players ready, starting game!');
+            log('Both players ready, starting game!');
             startGame(game, wss);
         }
 
     } catch (error) {
-        console.error('Error in handleAddShips:', error);
+        logError('Error in handleAddShips:', error);
     }
 }
 
@@ -81,9 +99,12 @@ function startGame(game: any, wss: WebSocketServer): void {
     const firstPlayer = Math.random() < 0.5 ? game.player1Index : game.player2Index;
     game.currentPlayerIndex = firstPlayer;
 
-    console.log(`Game ${game.id} starting. First player: ${firstPlayer}`);
+    log(`Game ${game.id} starting. First player: ${firstPlayer}`);
 
-    // Send start_game message to both players
+    const isBotGame = gameStorage.isBotGame(game.id);
+    const botIndex = isBotGame ? gameStorage.getBotPlayerIndex(game.id) : undefined;
+
+    // Send start_game message to human players
     wss.clients.forEach((client) => {
         const extClient = client as IExtendedWebSocket;
         
@@ -109,12 +130,19 @@ function startGame(game: any, wss: WebSocketServer): void {
             };
 
             extClient.send(JSON.stringify(response));
-            console.log(`Sent start_game to player ${playerIndex}`);
+            log(`Sent start_game to player ${playerIndex}`);
         }
     });
 
     // Send turn notification
     sendTurnNotification(game, wss);
+
+    // If bot's turn, make bot move
+    if (isBotGame && botIndex !== undefined && botIndex === firstPlayer) {
+        log('Bot turn at game start, making bot move');
+        const bot = new BotPlayer(game.id, botIndex, wss);
+        bot.makeMove();
+    }
 }
 
 /**
@@ -141,5 +169,5 @@ function sendTurnNotification(game: any, wss: WebSocketServer): void {
         }
     });
 
-    console.log(`Turn notification sent: player ${game.currentPlayerIndex}`);
+    log(`Turn notification sent: player ${game.currentPlayerIndex}`);
 }

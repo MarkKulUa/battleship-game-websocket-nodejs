@@ -1,31 +1,43 @@
-# Battleship Game (NodeJS, TypeScript, Websocket)
-> Static http server and base task packages. 
-> By default WebSocket client tries to connect to the 3000 port.
+# Battleship Game
+
+WebSocket-based multiplayer battleship game.
 
 ## Installation
-1. Clone/download repo
-2. `npm install`
 
-## Usage
-**Development**
+```bash
+npm install
+npm start
+```
 
-`npm run start:dev`
+Server will run on `http://localhost:3000`
 
-* App served @ `http://localhost:8181` with nodemon
+## Game Flow
 
-**Production**
+### 1. Registration
+Both players register with name and password
 
-`npm run start`
+### 2. Create Room
+First player creates a room
 
-* App served @ `http://localhost:8181` without nodemon
+Second player joins the room
 
----
+### 3. Place Ships
+Both players place their ships on the board
 
-**All commands**
+Game starts automatically when both players are ready.
 
-Command | Description
---- | ---
-`npm run start:dev` | App served @ `http://localhost:8181` with nodemon
-`npm run start` | App served @ `http://localhost:8181` without nodemon
+### 4. Battle
+Players take turns attacking
 
-**Note**: replace `npm` with `yarn` in `package.json` if you use yarn.
+Rules:
+- If you hit enemy ship, you get another turn
+- If you miss, turn passes to opponent
+- First player to destroy all enemy ships wins
+
+### 5. Game End
+When all ships are destroyed, game ends and winner is announced.
+
+## Bot Mode
+
+You can play against bot by creating a bot game instead of regular room.
+Bot will automatically place ships and make moves.

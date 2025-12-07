@@ -2,6 +2,8 @@ import { WebSocketServer } from 'ws';
 import { roomStorage, playerStorage } from '../storage/index.js';
 import { IExtendedWebSocket } from '../types/websocket.js';
 import { gameStorage } from '../storage/GameStorage.js';
+import { log, logError } from '../utils/logger.js';
+import { Player } from '../models/Player.js';
 
 /**
  * Handle room creation
@@ -14,28 +16,28 @@ export function handleCreateRoom(
         const playerId = ws.playerId;
         
         if (!playerId) {
-            console.error('Player not authenticated');
+            logError('Player not authenticated', new Error('No playerId'));
             return;
         }
 
         const player = playerStorage.findById(playerId);
         if (!player) {
-            console.error('Player not found:', playerId);
+            logError('Player not found:', playerId);
             return;
         }
 
-        console.log(`Creating room for player: ${player.name}`);
+        log(`Creating room for player: ${player.name} (ID: ${playerId})`);
 
         // Create new room with this player
         const room = roomStorage.createRoom(player);
 
-        console.log(`Room created: ${room.id}`);
+        log(`Room created: ${room.id}`, { roomId: room.id, playerId, playerName: player.name });
 
         // Broadcast updated room list to all clients
         broadcastRoomList(wss);
 
     } catch (error) {
-        console.error('Error in handleCreateRoom:', error);
+        logError('Error in handleCreateRoom:', error);
     }
 }
 
@@ -52,34 +54,37 @@ export function handleAddUserToRoom(
         const playerId = ws.playerId;
 
         if (!playerId) {
-            console.error('Player not authenticated');
+            logError('Player not authenticated', new Error('No playerId'));
             return;
         }
 
         const player = playerStorage.findById(playerId);
         if (!player) {
-            console.error('Player not found:', playerId);
+            logError('Player not found:', playerId);
             return;
         }
 
-        console.log(`Player ${player.name} joining room ${indexRoom}`);
+        log(`Player ${player.name} (ID: ${playerId}) joining room ${indexRoom}`);
 
         // Add player to room
         const room = roomStorage.addPlayerToRoom(indexRoom, player);
 
         if (!room) {
-            console.error('Room not found or full:', indexRoom);
+            logError('Room not found or full:', indexRoom);
             return;
         }
 
-        console.log(`Player added to room. Room now has ${room.players.length} players`);
+        log(`Player added to room. Room now has ${room.players.length} players`, {
+            roomId: room.id,
+            players: room.players.map(p => ({ id: p.id, name: p.name }))
+        });
 
         // Room is full (2 players), create game
         if (room.players.length === 2) {
             const player1 = room.players[0]!; // Safe: we just checked length === 2
             const player2 = room.players[1]!;
 
-            console.log(`Creating game for ${player1.name} vs ${player2.name}`);
+            log(`Creating game for ${player1.name} vs ${player2.name}`);
 
             // Create game
             const game = gameStorage.createGame(player1.id, player2.id);
@@ -87,7 +92,11 @@ export function handleAddUserToRoom(
             // Link game to room
             roomStorage.setGameId(room.id, game.id);
 
-            console.log(`Game created: ${game.id}`);
+            log(`Game created: ${game.id}`, {
+                gameId: game.id,
+                player1: { id: player1.id, name: player1.name, index: game.player1Index },
+                player2: { id: player2.id, name: player2.name, index: game.player2Index }
+            });
 
             // Send create_game message to both players
             wss.clients.forEach((client) => {
@@ -109,7 +118,7 @@ export function handleAddUserToRoom(
                     };
 
                     extClient.send(JSON.stringify(response));
-                    console.log(`Sent create_game to ${extClient.playerName}: idPlayer=${playerIndex}`);
+                    log(`Sent create_game to ${extClient.playerName}: idPlayer=${playerIndex}`);
                 }
             });
 
@@ -117,11 +126,12 @@ export function handleAddUserToRoom(
             broadcastRoomList(wss);
         } else {
             // Still waiting for second player
+            log('Waiting for second player, broadcasting room list');
             broadcastRoomList(wss);
         }
 
     } catch (error) {
-        console.error('Error in handleAddUserToRoom:', error);
+        logError('Error in handleAddUserToRoom:', error);
     }
 }
 
@@ -147,12 +157,74 @@ export function broadcastRoomList(wss: WebSocketServer): void {
 
     const message = JSON.stringify(response);
 
+    let sentCount = 0;
     wss.clients.forEach((client) => {
         const extClient = client as IExtendedWebSocket;
         if (extClient.readyState === extClient.OPEN) {
             extClient.send(message);
+            sentCount++;
         }
     });
 
-    console.log(`Broadcasted room list: ${availableRooms.length} available rooms`);
+    log(`Broadcasted room list to ${sentCount} clients: ${availableRooms.length} available rooms`, {
+        rooms: roomsData
+    });
+}
+
+/**
+ * Handle creating room with bot
+ */
+export function handleCreateRoomWithBot(
+    ws: IExtendedWebSocket,
+    _wss: WebSocketServer
+): void {
+    try {
+        const playerId = ws.playerId;
+        
+        if (!playerId) {
+            logError('Player not authenticated', new Error('No playerId'));
+            return;
+        }
+
+        const player = playerStorage.findById(playerId);
+        if (!player) {
+            logError('Player not found:', playerId);
+            return;
+        }
+
+        log(`Creating room with bot for player: ${player.name} (ID: ${playerId})`);
+
+        // Create bot player
+        const botPlayer = new Player('bot-' + Date.now(), 'Bot', 'bot-password', 0);
+        
+        // Create game directly with player and bot
+        const game = gameStorage.createGame(player.id, botPlayer.id);
+        
+        // Mark game as having bot
+        gameStorage.setBotGame(game.id, game.player2Index);
+
+        log(`Game with bot created: ${game.id}`, {
+            gameId: game.id,
+            player: { id: player.id, name: player.name, index: game.player1Index },
+            bot: { id: botPlayer.id, name: botPlayer.name, index: game.player2Index }
+        });
+
+        // Send create_game message to player
+        const gameData = {
+            idGame: game.id,
+            idPlayer: game.player1Index
+        };
+
+        const response = {
+            type: 'create_game',
+            data: JSON.stringify(gameData),
+            id: 0
+        };
+
+        ws.send(JSON.stringify(response));
+        log(`Sent create_game to ${player.name}: idPlayer=${game.player1Index}`);
+
+    } catch (error) {
+        logError('Error in handleCreateRoomWithBot:', error);
+    }
 }

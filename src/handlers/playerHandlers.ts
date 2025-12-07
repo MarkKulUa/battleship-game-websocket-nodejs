@@ -2,6 +2,7 @@ import { WebSocketServer } from 'ws';
 import { playerStorage } from '../storage/index.js';
 import { IRegData, IRegResponseData } from '../types/messages.js';
 import { IExtendedWebSocket } from '../types/websocket.js';
+import { log, logError } from '../utils/logger.js';
 
 /**
  * Handle player registration/login
@@ -16,7 +17,7 @@ export function handleRegister(
         const regData: IRegData = JSON.parse(data);
         const { name, password } = regData;
 
-        console.log(`Registration attempt: ${name}`);
+        log(`Registration attempt: ${name}`);
 
         // Validate input
         if (!name || !password) {
@@ -32,7 +33,7 @@ export function handleRegister(
         // Register or login player
         const { player, isNew } = playerStorage.register(name, password);
 
-        console.log(`Player ${isNew ? 'registered' : 'logged in'}: ${player.name} (ID: ${player.id})`);
+        log(`Player ${isNew ? 'registered' : 'logged in'}: ${player.name} (ID: ${player.id})`);
 
         // Store player ID in WebSocket for later use
         ws.playerId = player.id;
@@ -50,7 +51,7 @@ export function handleRegister(
         broadcastWinners(wss);
 
     } catch (error) {
-        console.error('Error in handleRegister:', error);
+        logError('Error in handleRegister:', error);
         sendRegResponse(ws, {
             name: '',
             index: 0,
@@ -70,7 +71,7 @@ function sendRegResponse(ws: IExtendedWebSocket, data: IRegResponseData): void {
         id: 0
     };
     ws.send(JSON.stringify(response));
-    console.log('Sent reg response:', data);
+    log('Sent reg response:', data);
 }
 
 /**
@@ -86,7 +87,7 @@ export function broadcastWinners(wss: WebSocketServer): void {
     
     const response = {
         type: 'update_winners',
-        data: JSON.stringify(winnersData), // Convert data to JSON string
+        data: JSON.stringify(winnersData),
         id: 0
     };
 
@@ -99,5 +100,5 @@ export function broadcastWinners(wss: WebSocketServer): void {
         }
     });
 
-    console.log(`Broadcasted winners table to ${wss.clients.size} clients`);
+    log(`Broadcasted winners table to ${wss.clients.size} clients`);
 }

@@ -1,25 +1,26 @@
 import { WebSocketServer } from 'ws';
 import { Server } from 'http';
 import { handleRegister } from '../handlers/playerHandlers.js';
-import { handleCreateRoom, handleAddUserToRoom, broadcastRoomList } from '../handlers/roomHandlers.js';
+import { handleCreateRoom, handleAddUserToRoom, broadcastRoomList, handleCreateRoomWithBot } from '../handlers/roomHandlers.js';
 import { handleAddShips } from '../handlers/shipHandlers.js';
 import { handleAttack, handleRandomAttack } from '../handlers/gameHandlers.js';
 import { IExtendedWebSocket } from '../types/websocket.js';
 import { IBaseMessage } from '../types/messages.js';
+import { log, logError } from '../utils/logger.js';
 
 export function initWebSocketServer(httpServer: Server): void {
     const wss = new WebSocketServer({ server: httpServer });
 
-    console.log('WebSocket server initialized');
+    log('WebSocket server initialized');
 
     wss.on('connection', (ws: IExtendedWebSocket) => {
-        console.log('New WebSocket connection established');
+        log('New WebSocket connection established');
 
         // Handle incoming messages
         ws.on('message', (message: Buffer) => {
             try {
                 const data = message.toString();
-                console.log('Received message:', data);
+                log('Received message:', data);
 
                 // Parse JSON message
                 const parsedMessage: IBaseMessage = JSON.parse(data);
@@ -29,25 +30,25 @@ export function initWebSocketServer(httpServer: Server): void {
                     throw new Error('Invalid message structure');
                 }
                 
-                console.log('Parsed message:', parsedMessage);
+                log('Parsed message:', parsedMessage);
 
                 // Route message to appropriate handler
                 handleMessage(ws, parsedMessage, wss);
             } catch (error) {
-                console.error('Error processing message:', error);
+                logError('Error processing message:', error);
                 sendError(ws, 'Invalid message format');
             }
         });
 
         // Handle connection close
         ws.on('close', () => {
-            console.log('WebSocket connection closed');
+            log('WebSocket connection closed', { playerId: ws.playerId, playerName: ws.playerName });
             // TODO: Clean up player data, remove from rooms, etc.
         });
 
         // Handle errors
         ws.on('error', (error) => {
-            console.error('WebSocket error:', error);
+            logError('WebSocket error:', error);
         });
     });
 }
@@ -56,7 +57,7 @@ export function initWebSocketServer(httpServer: Server): void {
 function handleMessage(ws: IExtendedWebSocket, message: IBaseMessage, wss: WebSocketServer): void {
     const { type, data } = message;
 
-    console.log(`Handling message type: ${type}`);
+    log(`Handling message type: ${type}`);
 
     // Route message to appropriate handler
     switch (type) {
@@ -68,6 +69,10 @@ function handleMessage(ws: IExtendedWebSocket, message: IBaseMessage, wss: WebSo
 
         case 'create_room':
             handleCreateRoom(ws, wss);
+            break;
+
+        case 'create_room_bot':
+            handleCreateRoomWithBot(ws, wss);
             break;
 
         case 'add_user_to_room':
@@ -87,7 +92,7 @@ function handleMessage(ws: IExtendedWebSocket, message: IBaseMessage, wss: WebSo
             break;
 
         default:
-            console.log('Unknown message type:', type);
+            log('Unknown message type:', type);
             sendError(ws, `Unknown message type: ${type}`);
     }
 }

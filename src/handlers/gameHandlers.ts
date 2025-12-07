@@ -7,6 +7,8 @@ import { IGame } from '../models/Game.js';
 import { TCellStatus } from '../models/Board.js';
 import { IShip } from '../models/Ship.js';
 import { broadcastWinners } from './playerHandlers.js';
+import { log } from '../utils/logger.js';
+import { BotPlayer } from '../bot/BotPlayer.js';
 
 /**
  * Handle attack
@@ -348,6 +350,16 @@ function sendTurnNotification(game: IGame, wss: WebSocketServer): void {
             extClient.send(message);
         }
     });
+
+    // If it's bot's turn, make bot move
+    if (gameStorage.isBotGame(game.id)) {
+        const botIndex = gameStorage.getBotPlayerIndex(game.id);
+        if (botIndex === game.currentPlayerIndex) {
+            log('Bot turn, making bot move');
+            const bot = new BotPlayer(game.id, botIndex, wss);
+            bot.makeMove();
+        }
+    }
 }
 
 /**
