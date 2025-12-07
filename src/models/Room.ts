@@ -1,7 +1,7 @@
-import {IPlayer} from "./Player";
+import { Player } from "./Player.js";
 
 export interface IRoom {
     id: string;
-    players: IPlayer[];
+    players: Player[];  // Store Player class instances, not IPlayer interface
     gameId?: string;
 }

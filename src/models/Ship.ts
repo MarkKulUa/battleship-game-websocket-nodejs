@@ -1,10 +1,10 @@
-export type ShipType = "small" | "medium" | "large" | "huge";
-export type ShipPosition = { x: number, y: number };
+export type TShipType = "small" | "medium" | "large" | "huge";
+export type TShipPosition = { x: number, y: number };
 
 export interface IShip {
-    position: ShipPosition;
+    position: TShipPosition;
     direction: boolean; // true = horizontal, false = vertical
-    type: ShipType;
+    type: TShipType;
     hits: boolean[];
     length: number;
 }
