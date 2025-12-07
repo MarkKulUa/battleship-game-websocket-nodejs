@@ -1,4 +1,5 @@
-import { IRoom, Player } from '../models';
+import { IRoom } from '../models/Room.js';
+import { Player } from '../models/Player.js';
 import { randomUUID } from 'crypto';
 
 class RoomStorage {

@@ -1,4 +1,5 @@
-import { IGame, IBoard, createEmptyBoard } from '../models';
+import { IGame } from '../models/Game.js';
+import { IBoard, createEmptyBoard } from '../models/Board.js';
 import { randomUUID } from 'crypto';
 
 class GameStorage {

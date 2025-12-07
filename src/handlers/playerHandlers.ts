@@ -1,12 +1,13 @@
-import { WebSocket, WebSocketServer } from 'ws';
+import { WebSocketServer } from 'ws';
 import { playerStorage } from '../storage/index.js';
-import { IRegData, IRegResponse, IUpdateWinnersResponse } from '../types/messages.js';
+import { IRegData, IRegResponseData } from '../types/messages.js';
+import { IExtendedWebSocket } from '../types/websocket.js';
 
 /**
  * Handle player registration/login
  */
 export function handleRegister(
-    ws: WebSocket,
+    ws: IExtendedWebSocket,
     data: string,
     wss: WebSocketServer
 ): void {
@@ -34,8 +35,8 @@ export function handleRegister(
         console.log(`Player ${isNew ? 'registered' : 'logged in'}: ${player.name} (ID: ${player.id})`);
 
         // Store player ID in WebSocket for later use
-        (ws as any).playerId = player.id;
-        (ws as any).playerName = player.name;
+        ws.playerId = player.id;
+        ws.playerName = player.name;
 
         // Send success response
         sendRegResponse(ws, {
@@ -62,10 +63,10 @@ export function handleRegister(
 /**
  * Send registration response to client
  */
-function sendRegResponse(ws: WebSocket, data: IRegResponse['data']): void {
-    const response: IRegResponse = {
+function sendRegResponse(ws: IExtendedWebSocket, data: IRegResponseData): void {
+    const response = {
         type: 'reg',
-        data,
+        data: JSON.stringify(data), // Convert data to JSON string
         id: 0
     };
     ws.send(JSON.stringify(response));
@@ -78,20 +79,23 @@ function sendRegResponse(ws: WebSocket, data: IRegResponse['data']): void {
 export function broadcastWinners(wss: WebSocketServer): void {
     const winners = playerStorage.getAllSortedByWins();
     
-    const response: IUpdateWinnersResponse = {
+    const winnersData = winners.map(player => ({
+        name: player.name,
+        wins: player.wins
+    }));
+    
+    const response = {
         type: 'update_winners',
-        data: winners.map(player => ({
-            name: player.name,
-            wins: player.wins
-        })),
+        data: JSON.stringify(winnersData), // Convert data to JSON string
         id: 0
     };
 
     const message = JSON.stringify(response);
     
     wss.clients.forEach((client) => {
-        if (client.readyState === WebSocket.OPEN) {
-            client.send(message);
+        const extClient = client as IExtendedWebSocket;
+        if (extClient.readyState === extClient.OPEN) {
+            extClient.send(message);
         }
     });
 

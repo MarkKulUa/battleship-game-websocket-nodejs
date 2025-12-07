@@ -1,13 +1,16 @@
-import { WebSocketServer, WebSocket } from 'ws';
+import { WebSocketServer } from 'ws';
 import { Server } from 'http';
 import { handleRegister } from '../handlers/playerHandlers.js';
+import { handleCreateRoom, handleAddUserToRoom, broadcastRoomList } from '../handlers/roomHandlers.js';
+import { IExtendedWebSocket } from '../types/websocket.js';
+import { IBaseMessage } from '../types/messages.js';
 
 export function initWebSocketServer(httpServer: Server): void {
     const wss = new WebSocketServer({ server: httpServer });
 
     console.log('WebSocket server initialized');
 
-    wss.on('connection', (ws: WebSocket) => {
+    wss.on('connection', (ws: IExtendedWebSocket) => {
         console.log('New WebSocket connection established');
 
         // Handle incoming messages
@@ -17,10 +20,16 @@ export function initWebSocketServer(httpServer: Server): void {
                 console.log('Received message:', data);
 
                 // Parse JSON message
-                const parsedMessage = JSON.parse(data);
+                const parsedMessage: IBaseMessage = JSON.parse(data);
+                
+                // Validate message structure
+                if (!parsedMessage.type || typeof parsedMessage.data !== 'string') {
+                    throw new Error('Invalid message structure');
+                }
+                
                 console.log('Parsed message:', parsedMessage);
 
-                // TODO: Route message to appropriate handler
+                // Route message to appropriate handler
                 handleMessage(ws, parsedMessage, wss);
             } catch (error) {
                 console.error('Error processing message:', error);
@@ -42,7 +51,7 @@ export function initWebSocketServer(httpServer: Server): void {
 }
 
 // Message handler - routes messages based on type
-function handleMessage(ws: WebSocket, message: any, wss: WebSocketServer): void {
+function handleMessage(ws: IExtendedWebSocket, message: IBaseMessage, wss: WebSocketServer): void {
     const { type, data } = message;
 
     console.log(`Handling message type: ${type}`);
@@ -51,16 +60,16 @@ function handleMessage(ws: WebSocket, message: any, wss: WebSocketServer): void 
     switch (type) {
         case 'reg':
             handleRegister(ws, data, wss);
+            // Send initial room list after registration
+            broadcastRoomList(wss);
             break;
 
         case 'create_room':
-            // TODO: Handle room creation
-            console.log('Create room request');
+            handleCreateRoom(ws, wss);
             break;
 
         case 'add_user_to_room':
-            // TODO: Handle adding user to room
-            console.log('Add user to room request:', data);
+            handleAddUserToRoom(ws, data, wss);
             break;
 
         case 'add_ships':
@@ -85,7 +94,7 @@ function handleMessage(ws: WebSocket, message: any, wss: WebSocketServer): void 
 }
 
 // Helper function to send error response
-function sendError(ws: WebSocket, errorText: string): void {
+function sendError(ws: IExtendedWebSocket, errorText: string): void {
     const response = {
         type: 'error',
         data: {
@@ -98,11 +107,12 @@ function sendError(ws: WebSocket, errorText: string): void {
 }
 
 // Helper function to broadcast message to all clients
-export function broadcast(wss: WebSocketServer, message: any): void {
+export function broadcast(wss: WebSocketServer, message: object): void {
     const messageStr = JSON.stringify(message);
     wss.clients.forEach((client) => {
-        if (client.readyState === WebSocket.OPEN) {
-            client.send(messageStr);
+        const extClient = client as IExtendedWebSocket;
+        if (extClient.readyState === extClient.OPEN) {
+            extClient.send(messageStr);
         }
     });
 }
