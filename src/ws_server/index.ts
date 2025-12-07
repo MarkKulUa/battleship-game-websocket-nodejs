@@ -2,6 +2,8 @@ import { WebSocketServer } from 'ws';
 import { Server } from 'http';
 import { handleRegister } from '../handlers/playerHandlers.js';
 import { handleCreateRoom, handleAddUserToRoom, broadcastRoomList } from '../handlers/roomHandlers.js';
+import { handleAddShips } from '../handlers/shipHandlers.js';
+import { handleAttack, handleRandomAttack } from '../handlers/gameHandlers.js';
 import { IExtendedWebSocket } from '../types/websocket.js';
 import { IBaseMessage } from '../types/messages.js';
 
@@ -73,18 +75,15 @@ function handleMessage(ws: IExtendedWebSocket, message: IBaseMessage, wss: WebSo
             break;
 
         case 'add_ships':
-            // TODO: Handle ships placement
-            console.log('Add ships request:', data);
+            handleAddShips(ws, data, wss);
             break;
 
         case 'attack':
-            // TODO: Handle attack
-            console.log('Attack request:', data);
+            handleAttack(ws, data, wss);
             break;
 
         case 'randomAttack':
-            // TODO: Handle random attack
-            console.log('Random attack request:', data);
+            handleRandomAttack(ws, data, wss);
             break;
 
         default:
